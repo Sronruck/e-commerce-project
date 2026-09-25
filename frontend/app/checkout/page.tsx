@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { products } from "@/data/mock";
 
-// รูปภาพตรงรุ่น Fear of God Essentials
+// รูปภาพสำรองเฉพาะฮู้ด Fear of God Essentials
 const HOODIE_IMAGES: Record<string, string> = {
   gray: "https://d2cva83hdk3bwc.cloudfront.net/fear-of-god-essentials-fleece-hoodie-light-heather-gray-2.jpg",
   sand: "https://img.sasom.co.th/fear-of-god-essentials-fleece-hoodie-desert-sand-1-n.jpg?width=1920&quality=75",
@@ -30,7 +30,6 @@ export default function CheckoutPage() {
     country: "Thailand", state: "", address: "", city: "", postalCode: "",
   });
 
-  // ดึงรายการจาก cart ใน localStorage
   useEffect(() => {
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
@@ -40,13 +39,11 @@ export default function CheckoutPage() {
         setCartItems([]);
       }
     } else if (products.length > 0) {
-      // ค่าสำรองกรณีเปิดหน้านี้ตรงๆ
       setCartItems([
         { product: products[0], variant: products[0].variants[0], quantity: 1 }
       ]);
     }
 
-    // ดึงข้อมูลฟอร์มเก่าถ้าเคยกรอกไว้
     const savedShipping = localStorage.getItem("shippingAddress");
     if (savedShipping) {
       try {
@@ -67,13 +64,15 @@ export default function CheckoutPage() {
 
   function handleContinue(e: React.FormEvent) {
     e.preventDefault();
-    // บันทึกที่อยู่จัดส่งลง localStorage เพื่อนำไปใช้หน้า payment
     localStorage.setItem("shippingAddress", JSON.stringify(form));
     router.push("/checkout/payment");
   }
 
-  // หารูปภาพสินค้าตามสี
+  // ดึงรูปจริงของสินค้าก่อนเสมอ ถ้าไม่มีจึงค่อย fallback
   const getImage = (item: CartItemType) => {
+    if (item.product?.images && item.product.images.length > 0) {
+      return item.product.images[0];
+    }
     const color = (item.variant?.color || "").toLowerCase();
     const name = (item.product?.name || "").toLowerCase();
     if (color.includes("sand") || name.includes("sand")) return HOODIE_IMAGES.sand;
@@ -104,7 +103,6 @@ export default function CheckoutPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
-          {/* ฟอร์มกรอกที่อยู่ */}
           <form onSubmit={handleContinue} className="md:col-span-2 space-y-6">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Contact info</p>
@@ -191,7 +189,6 @@ export default function CheckoutPage() {
             </button>
           </form>
 
-          {/* สรุปรายการสินค้าในออเดอร์ */}
           <div className="rounded-xl border border-gray-100 p-6 h-fit bg-gray-50/50 shadow-sm">
             <p className="mb-4 text-xs font-semibold uppercase text-gray-500">Your order ({cartItems.length})</p>
 

@@ -6,7 +6,7 @@ import { ArrowLeft, ShoppingBag, Trash2, Plus, Minus } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { products } from "@/data/mock";
 
-// รูปภาพตรงรุ่น Fear of God Essentials
+// รูปภาพตรงรุ่น Fear of God Essentials (สำรองสำหรับฮู้ด)
 const HOODIE_IMAGES: Record<string, string> = {
   gray: "https://d2cva83hdk3bwc.cloudfront.net/fear-of-god-essentials-fleece-hoodie-light-heather-gray-2.jpg",
   sand: "https://img.sasom.co.th/fear-of-god-essentials-fleece-hoodie-desert-sand-1-n.jpg?width=1920&quality=75",
@@ -20,7 +20,6 @@ interface CartItemType {
 }
 
 export default function CartPage() {
-  // เริ่มต้นโดยดึงข้อมูลจาก localStorage หากยังไม่มีให้ใช้ค่าตั้งต้นจาก mock
   const [cartItems, setCartItems] = useState<CartItemType[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -44,14 +43,12 @@ export default function CartPage() {
     setIsLoaded(true);
   }, []);
 
-  // ฟังก์ชัน Sync ข้อมูลลง LocalStorage และอัปเดตแจ้งเตือนไปที่ Navbar
   const syncCart = (newItems: CartItemType[]) => {
     setCartItems(newItems);
     localStorage.setItem("cart", JSON.stringify(newItems));
     window.dispatchEvent(new Event("cart-updated"));
   };
 
-  // เพิ่ม / ลด จำนวน
   const updateQuantity = (variantId: string, delta: number) => {
     const updated = cartItems
       .map((item) => {
@@ -66,7 +63,6 @@ export default function CartPage() {
     syncCart(updated);
   };
 
-  // ลบสินค้าออกจากตะกร้า
   const removeItem = (variantId: string) => {
     const updated = cartItems.filter((item) => item.variant.id !== variantId);
     syncCart(updated);
@@ -76,11 +72,14 @@ export default function CartPage() {
   const shipping = cartItems.length > 0 ? 5 : 0;
   const total = subtotal + shipping;
 
-  // ค้นหารูปภาพตามสี variant หรือชื่อ
+  // คืนค่ารูปภาพ: ดึงจาก product.images ก่อนเสมอ ถ้าไม่มีค่อย fallback ไปหา hoodie map
   const getImage = (item: CartItemType) => {
-    const color = (item.variant.color || "").toLowerCase();
-    const name = (item.product.name || "").toLowerCase();
-    if (color.includes("gray") || name.includes("gray")) return HOODIE_IMAGES.gray;
+    if (item.product?.images && item.product.images.length > 0) {
+      return item.product.images[0];
+    }
+
+    const color = (item.variant?.color || "").toLowerCase();
+    const name = (item.product?.name || "").toLowerCase();
     if (color.includes("sand") || name.includes("sand")) return HOODIE_IMAGES.sand;
     if (color.includes("black") || name.includes("black")) return HOODIE_IMAGES.black;
     return HOODIE_IMAGES.gray;
@@ -124,7 +123,6 @@ export default function CartPage() {
                   key={item.variant.id}
                   className="flex gap-4 rounded-xl border border-gray-100 p-4 shadow-sm items-center"
                 >
-                  {/* แสดงรูปภาพสินค้าจริง */}
                   <div className="h-24 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     <img
                       src={getImage(item)}

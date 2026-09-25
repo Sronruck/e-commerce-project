@@ -19,68 +19,125 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    // 💡 ดึงจาก lastOrder ที่บันทึกไว้ก่อนเคลียร์ตะกร้า
-    const savedOrder = localStorage.getItem("lastOrder") || localStorage.getItem("cart");
-    const savedShipping = localStorage.getItem("shippingAddress");
-    const savedStatus = localStorage.getItem(`orderStatus_${params.id}`);
+    const orderId = params.id;
+    let foundOrder: any = null;
 
-    let cartItems: any[] = [];
-    if (savedOrder) {
+    // 1. ตรวจสอบข้อมูลเฉพาะของ Order ID นี้จาก localStorage ก่อน
+    const specificDetail = localStorage.getItem(`orderDetail_${orderId}`);
+    if (specificDetail) {
       try {
-        cartItems = JSON.parse(savedOrder);
-      } catch {
-        cartItems = [];
+        foundOrder = JSON.parse(specificDetail);
+      } catch (e) {
+        console.error(e);
       }
     }
 
-    const shippingInfo = savedShipping ? JSON.parse(savedShipping) : null;
+    // 2. ถ้าไม่พบ ให้ค้นหาจากรายการ orders รวม
+    if (!foundOrder) {
+      const allOrdersRaw = localStorage.getItem("orders");
+      if (allOrdersRaw) {
+        try {
+          const allOrders = JSON.parse(allOrdersRaw);
+          foundOrder = allOrders.find(
+            (o: any) => o.id === orderId || o.orderNumber === orderId
+          );
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
 
-    if (cartItems.length > 0 || shippingInfo || savedStatus) {
-      const subtotal = cartItems.reduce((sum: number, it: any) => {
-        const price = Number(it.product?.price ?? it.price ?? 38.99);
+    // 3. จัดการสถานะและที่อยู่
+    const savedStatus =
+      localStorage.getItem(`orderStatus_${orderId}`) ||
+      (foundOrder?.orderNumber ? localStorage.getItem(`orderStatus_${foundOrder.orderNumber}`) : null);
+    const savedShipping = localStorage.getItem("shippingAddress");
+    const defaultShipping = savedShipping ? JSON.parse(savedShipping) : mockOrder.shippingAddress;
+
+    if (foundOrder) {
+      const items = foundOrder.items || [];
+      const subtotal = items.reduce((sum: number, it: any) => {
+        const price = Number(it.product?.price ?? it.price ?? 0);
         const qty = Number(it.quantity ?? 1);
         return sum + price * qty;
       }, 0);
-
-      const shipping = cartItems.length > 0 ? 5 : 0;
-      const total = subtotal + shipping;
+      const shipping = items.length > 0 ? 5 : 0;
+      const total = foundOrder.total || subtotal + shipping;
 
       setOrder({
+        id: foundOrder.id,
+        orderNumber: foundOrder.orderNumber || orderId,
+        createdAt: foundOrder.createdAt || new Date().toISOString(),
+        status: savedStatus || foundOrder.status || "PENDING",
+        statusHistory: foundOrder.statusHistory || [
+          { status: "PENDING", timestamp: foundOrder.createdAt || new Date().toISOString() },
+        ],
+        items: items,
+        shippingAddress: foundOrder.shippingAddress || defaultShipping,
+        subtotal: subtotal,
+        shipping: shipping,
+        total: total,
+      });
+    } else if (orderId === "o1" || orderId === mockOrder.id || orderId === mockOrder.orderNumber) {
+      setOrder({
         ...mockOrder,
-        orderNumber: params.id || mockOrder.orderNumber,
+        orderNumber: mockOrder.orderNumber,
         status: savedStatus || mockOrder.status,
-        items: cartItems.length > 0 ? cartItems : mockOrder.items,
-        shippingAddress: shippingInfo
-          ? {
-              firstName: shippingInfo.firstName || "Customer",
-              lastName: shippingInfo.lastName || "",
-              address: shippingInfo.address || "Address",
-              city: shippingInfo.city || "",
-              state: shippingInfo.state || "",
-              postalCode: shippingInfo.postalCode || "",
-              country: shippingInfo.country || "Thailand",
-              phone: shippingInfo.phone || "",
-            }
-          : mockOrder.shippingAddress,
-        subtotal: subtotal > 0 ? subtotal : mockOrder.subtotal,
-        shipping: shipping > 0 ? shipping : mockOrder.shipping,
-        total: total > 0 ? total : mockOrder.total,
+      });
+    } else {
+      setOrder({
+        ...mockOrder,
+        orderNumber: orderId,
+        status: savedStatus || "PENDING",
       });
     }
 
     setIsLoaded(true);
   }, [params.id]);
 
-  // ฟังก์ชันกดยกเลิกคำสั่งซื้อ
   const handleCancelOrder = () => {
     const isConfirm = window.confirm("คุณต้องการยกเลิกคำสั่งซื้อนี้ใช่หรือไม่?");
     if (isConfirm) {
       setOrder((prev: any) => ({ ...prev, status: "CANCELLED" }));
+      
+      // บันทึกสถานะระบุ Order ID และ Order Number ชัดเจน
       localStorage.setItem(`orderStatus_${params.id}`, "CANCELLED");
+      if (order?.orderNumber) {
+        localStorage.setItem(`orderStatus_${order.orderNumber}`, "CANCELLED");
+      }
+
+      // อัปเดตสถานะใน Array กลาง เพื่อให้หน้า Admin และ Orders List อัปเดตทันที
+      try {
+        const allOrdersRaw = localStorage.getItem("orders");
+        if (allOrdersRaw) {
+          const allOrders = JSON.parse(allOrdersRaw);
+          const updated = allOrders.map((o: any) => {
+            if (
+              o.id === params.id || 
+              o.orderNumber === params.id || 
+              (order?.orderNumber && o.orderNumber === order.orderNumber)
+            ) {
+              return { ...o, status: "CANCELLED" };
+            }
+            return o;
+          });
+          localStorage.setItem("orders", JSON.stringify(updated));
+        }
+      } catch (e) {
+        console.error("Failed to sync cancel status:", e);
+      }
     }
   };
 
   const getImage = (item: any) => {
+    const imgs = item.product?.images || item.images;
+    if (imgs && imgs.length > 0) {
+      return typeof imgs[0] === "string" ? imgs[0] : imgs[0]?.url;
+    }
+    if (item.image) {
+      return item.image;
+    }
+
     const color = (item.variant?.color || "").toLowerCase();
     const name = (item.product?.name || item.name || "").toLowerCase();
     if (color.includes("sand") || name.includes("sand")) return HOODIE_IMAGES.sand;
@@ -104,7 +161,12 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
       <section className="mx-auto max-w-4xl px-6 py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg font-semibold">Order {order.orderNumber}</h1>
+            <div className="flex items-center gap-2 mb-2">
+              <Link href="/orders" className="text-xs text-gray-500 hover:text-black inline-flex items-center gap-1">
+                <ArrowLeft size={14} /> Back to My Orders
+              </Link>
+            </div>
+            <h1 className="text-lg font-semibold">Order #{order.orderNumber}</h1>
             <p className="text-sm text-gray-500">
               Placed on {new Date(order.createdAt).toLocaleDateString()}
             </p>
@@ -151,7 +213,7 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
                 </Link>
               </div>
             ) : (
-              <OrderStatusTimeline history={order.statusHistory} currentStatus={order.status} />
+              <OrderStatusTimeline history={order.statusHistory || []} currentStatus={order.status} />
             )}
           </div>
 
@@ -191,15 +253,15 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
               <div className="mt-3 space-y-1 border-t border-gray-200 pt-3 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
-                  <span>${order.subtotal.toFixed(2)}</span>
+                  <span>${Number(order.subtotal || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Shipping</span>
-                  <span>${order.shipping.toFixed(2)}</span>
+                  <span>${Number(order.shipping || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-gray-100 pt-2 text-gray-900">
                   <span>Total</span>
-                  <span>${order.total.toFixed(2)}</span>
+                  <span>${Number(order.total || 0).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -207,14 +269,14 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
             <div className="rounded-xl border border-gray-100 p-6 text-sm">
               <h2 className="mb-3 text-xs font-semibold uppercase text-gray-500">Shipping address</h2>
               <p className="font-medium text-gray-900">
-                {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                {order.shippingAddress?.firstName} {order.shippingAddress?.lastName}
               </p>
-              <p className="text-gray-600">{order.shippingAddress.address}</p>
+              <p className="text-gray-600">{order.shippingAddress?.address}</p>
               <p className="text-gray-600">
-                {order.shippingAddress.city} {order.shippingAddress.state} {order.shippingAddress.postalCode}
+                {order.shippingAddress?.city} {order.shippingAddress?.state} {order.shippingAddress?.postalCode}
               </p>
-              <p className="text-gray-600">{order.shippingAddress.country}</p>
-              <p className="mt-2 text-gray-600">{order.shippingAddress.phone}</p>
+              <p className="text-gray-600">{order.shippingAddress?.country}</p>
+              <p className="mt-2 text-gray-600">{order.shippingAddress?.phone}</p>
             </div>
           </div>
         </div>

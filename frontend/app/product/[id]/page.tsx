@@ -7,7 +7,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { products } from "@/data/mock";
 
-// รูปภาพตรงตามสีจริงของ Fear of God Essentials
+// รูปภาพสำรองเฉพาะเสื้อฮู้ด Essentials (fallback)
 const HOODIE_IMAGE_MAP: Record<string, string> = {
   gray: "https://d2cva83hdk3bwc.cloudfront.net/fear-of-god-essentials-fleece-hoodie-light-heather-gray-2.jpg",
   sand: "https://img.sasom.co.th/fear-of-god-essentials-fleece-hoodie-desert-sand-1-n.jpg?width=1920&quality=75",
@@ -35,8 +35,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     (v) => v.color === selectedColor && v.size === selectedSize
   ) ?? product.variants[0];
 
-  // ฟังก์ชันเลือกรูปภาพให้ตรงกับสีที่เลือก
-  const getProductImage = () => {
+  // คืนค่ารูปภาพตามสินค้า: ถ้ามี images ให้ใช้รูปจากสินค้า ถ้าไม่มีค่อยดูตามสี
+  const currentImage = useMemo(() => {
+    if (product.images && product.images.length > 0) {
+      return product.images[activeThumb] || product.images[0];
+    }
+
     const c = (selectedColor || "").toLowerCase();
     const name = (product.name || "").toLowerCase();
 
@@ -47,9 +51,15 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       return HOODIE_IMAGE_MAP.black;
     }
     return HOODIE_IMAGE_MAP.gray;
-  };
+  }, [product, activeThumb, selectedColor]);
 
-  const currentImage = getProductImage();
+  // รายการรูปรวมสำหรับแสดง Thumbnail
+  const galleryImages = useMemo(() => {
+    if (product.images && product.images.length > 0) {
+      return product.images;
+    }
+    return [currentImage];
+  }, [product, currentImage]);
 
   // ฟังก์ชัน Add to Cart ที่บันทึกเข้า localStorage และยิง Event ไปหา Navbar
   function addToCart() {
@@ -106,7 +116,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
             {/* แกลเลอรี่รูปย่อด้านล่าง */}
             <div className="mt-3 flex gap-2">
-              {[0, 1, 2].map((i) => (
+              {galleryImages.map((img, i) => (
                 <button
                   key={i}
                   type="button"
@@ -116,7 +126,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   }`}
                 >
                   <img
-                    src={currentImage}
+                    src={img}
                     alt=""
                     className="h-full w-full object-cover"
                   />

@@ -45,18 +45,61 @@ export default function PaymentPage() {
     const cartItems = currentCart ? JSON.parse(currentCart) : [];
     const shipping = savedShipping ? JSON.parse(savedShipping) : {};
 
-    // 1. สำรองข้อมูลสินค้าสำหรับแสดงผลหน้าเว็บ
-    if (currentCart) {
-      localStorage.setItem("lastOrder", currentCart);
+    // ดึง User ที่กำลังล็อกอินอยู่ปัจจุบัน
+    const currentUserRaw = localStorage.getItem("user");
+    const currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
+    const currentUserId = currentUser?.id || currentUser?.email || shipping.email || "guest";
+    const currentEmail = currentUser?.email || shipping.email || "customer@example.com";
+    const currentName = currentUser?.name || `${shipping.firstName || "Customer"} ${shipping.lastName || ""}`.trim();
+
+    // สร้าง ID และ Order Number ใหม่ที่ไม่ซ้ำกัน
+    const uniqueNumber = Math.floor(10000 + Math.random() * 90000);
+    const newOrderId = `ord-${Date.now()}`;
+    const newOrderNumber = `ORD-2026-${uniqueNumber}`;
+
+    const subtotal = cartItems.reduce(
+      (sum: number, it: any) => sum + (it.product?.price || 0) * (it.quantity || 1),
+      0
+    );
+    const calculatedTotal = subtotal > 0 ? subtotal + 5 : total;
+
+    // ผูก userId และ email เพื่อไม่ให้ปนกับ Account อื่น
+    const newOrderRecord = {
+      id: newOrderId,
+      orderNumber: newOrderNumber,
+      userId: currentUserId,
+      total: calculatedTotal,
+      status: "PENDING",
+      createdAt: new Date().toISOString(),
+      user: {
+        id: currentUserId,
+        name: currentName,
+        email: currentEmail,
+      },
+      shippingAddress: shipping,
+      items: cartItems,
+      paymentMethod: method,
+    };
+
+    // 1. บันทึกลงใน Array 'orders'
+    try {
+      const existingOrdersRaw = localStorage.getItem("orders");
+      const existingOrders = existingOrdersRaw ? JSON.parse(existingOrdersRaw) : [];
+      existingOrders.unshift(newOrderRecord);
+      localStorage.setItem("orders", JSON.stringify(existingOrders));
+
+      localStorage.setItem(`orderDetail_${newOrderId}`, JSON.stringify(newOrderRecord));
+      localStorage.setItem(`orderStatus_${newOrderId}`, "PENDING");
+    } catch (e) {
+      console.error("Failed to save order to localStorage:", e);
     }
 
-    // 2. ดึง JWT Token สำหรับผ่าน JwtAuthGuard
+    // 2. ส่ง Request เข้า Backend
     const token =
       localStorage.getItem("token") ||
       localStorage.getItem("access_token") ||
       localStorage.getItem("jwt");
 
-    // 3. จัด Format ข้อมูลให้ตรงกับ CreateOrderDto ใน Backend
     const orderPayload = {
       items: cartItems.map((it: any) => ({
         variantId: it.variant?.id || it.variantId || "v1",
@@ -73,11 +116,8 @@ export default function PaymentPage() {
       shippingCountry: shipping.country || "Thailand",
     };
 
-    let createdOrderId = "o1";
-
     try {
-      // 4. ส่ง Request ไปสร้าง Order ใน NestJS และบันทึกเข้า Neon Database
-      const res = await fetch("http://localhost:4000/api/orders", {
+      const res = await fetch("http://localhost:5000/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -88,22 +128,19 @@ export default function PaymentPage() {
 
       if (res.ok) {
         const data = await res.json();
-        if (data?.id || data?.orderNumber) {
-          createdOrderId = data.id || data.orderNumber;
+        if (data?.id) {
+          localStorage.setItem(`orderStatus_${data.id}`, "PENDING");
         }
-      } else {
-        console.warn("API response not ok:", await res.text());
       }
     } catch (err) {
-      console.error("Failed to connect to backend:", err);
+      console.warn("Backend offline, order saved locally:", err);
     }
 
-    // 5. เคลียร์ตะกร้าสินค้า
+    // 3. เคลียร์ตะกร้าสินค้า
     localStorage.removeItem("cart");
     window.dispatchEvent(new Event("cart-updated"));
-    localStorage.setItem(`orderStatus_${createdOrderId}`, "SHIPPED");
 
-    router.push(`/account/orders/${createdOrderId}`);
+    router.push(`/account/orders/${newOrderId}`);
   }
 
   return (

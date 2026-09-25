@@ -4,43 +4,37 @@ import Link from "next/link";
 import { Star, ArrowUpRight } from "lucide-react";
 import { Product } from "@/lib/types";
 
-// ลิงก์รูปภาพของแท้ตรงรุ่น Fear of God Essentials แต่ละสี
+// ลิงก์รูปภาพของแท้ตรงรุ่น Fear of God Essentials แต่ละสี (สำรองกรณีสินค้าไม่มีรูป)
 const HOODIE_IMAGE_MAP: Record<string, string> = {
-  // 1. Light Heather Gray
   gray: "https://d2cva83hdk3bwc.cloudfront.net/fear-of-god-essentials-fleece-hoodie-light-heather-gray-2.jpg",
-  
-  // 2. Desert Sand
   sand: "https://img.sasom.co.th/fear-of-god-essentials-fleece-hoodie-desert-sand-1-n.jpg?width=1920&quality=75",
-  
-  // 3. Classic Fit Jet Black
   black: "https://d2cva83hdk3bwc.cloudfront.net/192as252050f-fear-of-god-essentials-classic-fit-fleece-hoodie-jet-black-1.jpg",
 };
 
 export default function ProductCard({ product }: { product: Product }) {
   const resolveImage = () => {
+    // 1. ตรวจหารูปภาพจริงของสินค้าก่อนเสมอ (ทั้งแบบสตริงตรงๆ หรือ object จาก Prisma)
+    const existing =
+      (typeof product.images?.[0] === "string" ? product.images[0] : null) ||
+      (product as any).images?.[0]?.url ||
+      (product as any).imageUrl;
+
+    if (existing && typeof existing === "string") {
+      // ถ้ารูปเป็น URL ภายนอก (http) ให้ใช้ได้ทันที
+      if (existing.startsWith("http")) {
+        return existing;
+      }
+    }
+
+    // 2. ถ้าเป็นสินค้า Fear of God หรือไม่มี URL รูปภายนอก ให้จับคู่ตามสี
     const name = (product.name || "").toLowerCase();
 
-    // เช็คชื่อสินค้าเพื่อดึงรูปให้ตรงรุ่น
-    if (name.includes("gray") || name.includes("heather")) {
-      return HOODIE_IMAGE_MAP.gray;
-    }
     if (name.includes("desert") || name.includes("sand") || name.includes("beige")) {
       return HOODIE_IMAGE_MAP.sand;
     }
     if (name.includes("black") || name.includes("jet")) {
       return HOODIE_IMAGE_MAP.black;
     }
-
-    // ถ้าเป็นสินค้าอื่นใน Database ให้ดึงรูปจาก object ปกติ
-    const existing =
-      (product as any).images?.[0]?.url ||
-      (typeof (product as any).images?.[0] === "string" ? (product as any).images[0] : null) ||
-      (product as any).imageUrl;
-
-    if (existing && typeof existing === "string" && existing.startsWith("http")) {
-      return existing;
-    }
-
     return HOODIE_IMAGE_MAP.gray;
   };
 
@@ -57,7 +51,7 @@ export default function ProductCard({ product }: { product: Product }) {
           loading="lazy"
         />
 
-        {/* แผ่นฟิล์มไล่ระดับแสงนุ่มๆ */}
+        {/* แผ่นฟิล์มไล่ระดับแสง */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
         {/* ปุ่มลูกศรลอยมุมขวาบน */}
